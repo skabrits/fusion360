@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+source /opt/fusion-lab/bin/fusion-common
+source /opt/fusion-lab/bin/fusion-proxy-env
+[[ $# = 1 && "$1" = adskidmgr:* ]] || exit 2
+exe=$(/opt/fusion-lab/bin/find-fusion-exe AdskIdentityManager.exe)
+cd "$(dirname "$exe")"
+# Never log the callback URI: it contains a short-lived authorization code.
+exec "$WINE" "$exe" "$1" >/dev/null 2>&1

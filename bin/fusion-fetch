@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Completed downloads are verified against their local hash, then reused.
+# Partial transfers resume. The URL is recorded to prevent resuming another resource.
+set -Eeuo pipefail
+[[ $# = 2 ]] || { echo 'Usage: fusion-fetch URL FILE' >&2; exit 2; }
+url=$1; dest=$2
+mkdir -p "$(dirname "$dest")"
+exec 9>"$dest.lock"
+flock 9
+if [[ -s "$dest" && -s "$dest.sha256" && -f "$dest.url" ]] && \
+   [[ $(cat "$dest.url") = "$url" ]] && sha256sum --status -c "$dest.sha256"; then
+    echo "Using cached $(basename "$dest")"
+    exit 0
+fi
+if [[ -e "$dest.part" && -f "$dest.url" && $(cat "$dest.url") != "$url" ]]; then
+    mv "$dest.part" "$dest.part.previous-$(date +%s%N)"
+fi
+printf '%s' "$url" > "$dest.url"
+echo "Downloading/resuming $(basename "$dest")"
+# Separate curl processes recompute the resume offset after each partial transfer.
+for attempt in $(seq 1 12); do
+    code=0
+    curl --fail --location --continue-at - --connect-timeout 20 \
+      --speed-limit 1024 --speed-time 60 --max-time 7200 \
+      "$url" -o "$dest.part" || code=$?
+    if (( code == 0 )); then
+        test -s "$dest.part"
+        [[ $(head -c 2 "$dest.part") = MZ ]] || { echo 'Not a Windows executable.' >&2; exit 1; }
+        mv "$dest.part" "$dest"
+        sha256sum "$dest" > "$dest.sha256"
+        exit 0
+    fi
+    if (( code == 33 )); then
+        echo 'Server refused resume; retaining partial file. Verify resource/proxy before retrying.' >&2
+        exit "$code"
+    fi
+    echo "Transfer failed (curl $code), attempt $attempt/12; partial data retained." >&2
+    (( attempt < 12 )) && sleep 3
+done
+exit 1

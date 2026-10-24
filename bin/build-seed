@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+trap 'echo "build-seed failed at line $LINENO (exit $?)" >&2' ERR
+export TZ=Etc/UTC
+export FUSION_IMAGE_BUILD=1
+export FUSION_INSTALLER_URL WEBVIEW_INSTALLER_URL FUSION_SEED_REV
+# BuildKit cache directories start root-owned. Prefix identity must remain abc.
+install -d -o abc -g abc /config/.cache/winetricks /var/cache/fusion-downloads /config/.autodesk_fusion
+mkdir -p /config/.cache/mesa_shader_cache
+chown abc:abc /config /config/.cache
+chown -R abc:abc /config/.cache/mesa_shader_cache
+chown -R abc:abc /config/.cache/winetricks /var/cache/fusion-downloads /config/.autodesk_fusion
+trap 'runuser -u abc -- env WINEPREFIX=/config/.autodesk_fusion/wineprefixes/default wineserver -k || true' EXIT
+runuser -u abc -- timeout --kill-after=30s 4h \
+    xvfb-run -a -s '-screen 0 1920x1080x24 -nolisten tcp' \
+    dbus-run-session -- /opt/fusion-lab/bin/fusion-install
+echo 'Installer returned successfully; stopping any remaining Wine server.'
+stop_status=0
+runuser -u abc -- env WINEPREFIX=/config/.autodesk_fusion/wineprefixes/default wineserver -k || stop_status=$?
+# Wine returns 1 when there was no server to signal. The installer already stops it.
+if (( stop_status > 1 )); then
+    echo "wineserver -k failed with exit $stop_status" >&2
+    exit "$stop_status"
+fi
+# A failure to finish shutdown must still stop packaging.
+runuser -u abc -- env WINEPREFIX=/config/.autodesk_fusion/wineprefixes/default \
+    timeout --kill-after=10s 60s wineserver -w
+# Do not ship the ~1.5GB installer a second time or any build-time browser profile.
+rm -f /config/.autodesk_fusion/downloads/*.exe
+# Downloads is a disposable build-only mapping; restore an empty native directory.
+rm /config/.autodesk_fusion/wineprefixes/default/drive_c/users/abc/Downloads
+mkdir -p /config/.autodesk_fusion/wineprefixes/default/drive_c/users/abc/Downloads
+mkdir -p /opt/fusion-seed
+# Prefix retains its /config path; never relocate it to another home at runtime.
+echo 'Packaging installed Fusion prefix.'
+tar -C /config -czf /opt/fusion-seed/prefix.tar.gz .autodesk_fusion
+sha256sum /opt/fusion-seed/prefix.tar.gz > /opt/fusion-seed/prefix.tar.gz.sha256
+cp /opt/fusion-package-versions.txt /opt/fusion-seed/
+# Factory artifact is from a clean, unauthenticated build, not the user's logged-in volume.
+
+echo 'Factory prefix archive and checksum created successfully.'

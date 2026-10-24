@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# Build-only installer. Users do not run this after opening Selkies.
+source /opt/fusion-lab/bin/fusion-common
+[[ ${FUSION_IMAGE_BUILD:-0} = 1 ]] || { echo 'Fusion is installed during docker build; do not run this interactively.' >&2; exit 1; }
+[[ -n ${DISPLAY:-} ]] || exit 1
+[[ ! -e "$WINEPREFIX/system.reg" ]] || { echo 'Refusing an existing prefix.' >&2; exit 1; }
+exec > >(tee "$FUSION_ROOT/logs/image-install.log") 2>&1
+trap 'echo "Fusion image install failed at line $LINENO" >&2' ERR
+mkdir -p "$FUSION_ROOT/downloads" "$WINEPREFIX"
+fetch=/opt/fusion-lab/bin/fusion-fetch
+[[ ${FUSION_SEED_REV:-1} =~ ^[a-zA-Z0-9._-]+$ ]] || exit 2
+cache=/var/cache/fusion-downloads/${FUSION_SEED_REV:-1}
+"$fetch" "$FUSION_INSTALLER_URL" "$cache/FusionClientInstaller.exe"
+"$fetch" "$WEBVIEW_INSTALLER_URL" "$cache/WebView2.exe"
+# Local copies live under the prefix's Downloads mapping during installer execution.
+cp "$cache/FusionClientInstaller.exe" "$cache/WebView2.exe" "$FUSION_ROOT/downloads/"
+cat "$cache/FusionClientInstaller.exe.sha256" "$cache/WebView2.exe.sha256" > "$FUSION_ROOT/logs/downloads.sha256"
+"$WINE" --version > "$FUSION_ROOT/logs/wine-version.txt"
+# Initialize and verify the prefix before Winetricks modifies it.
+/opt/fusion-lab/bin/fusion-prefix-check
+wt=/opt/fusion-lab/vendor/winetricks
+# Keep Wine's Z: mapping: installers and Wine may need Unix-side paths.
+# Only detach home-directory links; this is not a security sandbox.
+"$wt" -q isolate_home
+win_downloads="$WINEPREFIX/drive_c/users/abc/Downloads"
+if [[ -L "$win_downloads" ]]; then rm "$win_downloads"; fi
+if [[ -d "$win_downloads" ]]; then rmdir "$win_downloads"; fi
+ln -s "$FUSION_ROOT/downloads" "$win_downloads"
+"$wt" -q atmlib gdiplus corefonts cjkfonts dotnet20 dotnet48 msxml4 msxml6 vcrun2022 fontsmooth=rgb winhttp win10
+for setting in 'adpclientservice.exe:native' 'AdCefWebBrowser.exe:builtin' 'msvcp140:native' 'mfc140u:native' 'bcp47langs:'; do
+    "$WINE" reg add 'HKCU\Software\Wine\DllOverrides' /v "${setting%%:*}" /t REG_SZ /d "${setting#*:}" /f
+done
+x11key='HKCU\Software\Wine\AppDefaults\fusion360.exe\X11 Driver'
+"$WINE" reg add "$x11key" /f
+"$WINE" reg add "$x11key" /v Managed /t REG_SZ /d N /f
+"$WINE" reg add "$x11key" /v Decorated /t REG_SZ /d Y /f
+"$WINE" reg add "$x11key" /v UseTakeFocus /t REG_SZ /d N /f
+"$WINE" 'C:\users\abc\Downloads\WebView2.exe' /silent /install
+
+# Wine's automatic crash debugger is useful interactively but is harmful in an unattended
+# image build: a crashed installer child can otherwise sit in winedbg until the outer timeout.
+"$WINE" reg add 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\AeDebug' \
+    /v Debugger /t REG_SZ /d '' /f || true
+
+run_installer_pass() {
+    local label=$1 limit=$2 rc=0 stop_rc=0
+    echo "Starting Fusion installer pass $label (limit $limit)."
+    timeout --kill-after=30s "$limit" "$WINE" \
+        'C:\users\abc\Downloads\FusionClientInstaller.exe' --quiet || rc=$?
+    case "$rc" in
+        0) echo "Fusion installer pass $label returned successfully." ;;
+        124|137) echo "Fusion installer pass $label timed out/was killed; continuing with the documented retry flow." ;;
+        *) echo "Fusion installer pass $label exited $rc; continuing with the retry flow and validating installed files afterwards." ;;
+    esac
+
+    # Autodesk's bootstrapper can leave helper processes behind even after useful payloads
+    # have been written. Reset Wine between passes; only unexpected wineserver failures abort.
+    "$WINESERVER" -k || stop_rc=$?
+    if (( stop_rc > 1 )); then
+        echo "wineserver -k failed after installer pass $label (exit $stop_rc)" >&2
+        exit "$stop_rc"
+    fi
+    timeout --kill-after=10s 60s "$WINESERVER" -w || true
+}
+
+# Fusion's Wine installation is intentionally two-pass. The bootstrapper is known to
+# stall or exit after partially staging webdeploy; a clean Wine restart lets pass 2 finish it.
+run_installer_pass 1 20m
+run_installer_pass 2 10m
+
+# The bootstrapper's exit status is not the success criterion. Require the actual programs.
+/opt/fusion-lab/bin/find-fusion-exe Fusion360.exe > "$FUSION_ROOT/logs/fusion-exe.txt"
+/opt/fusion-lab/bin/find-fusion-exe AdskIdentityManager.exe > "$FUSION_ROOT/logs/identity-exe.txt"
+# Ensure no application/helper remains before taking the factory snapshot.
+stop_rc=0
+"$WINESERVER" -k || stop_rc=$?
+if (( stop_rc > 1 )); then exit "$stop_rc"; fi
+timeout --kill-after=10s 60s "$WINESERVER" -w || true
+while IFS= read -r -d '' dll; do
+    target="$(dirname "$(dirname "$dll")")/DeviceSettingsProvider.dll"
+    [[ -e "$target" ]] || ln -s "$dll" "$target"
+done < <(find "$WINEPREFIX/drive_c" -path '*/ADPCER/DeviceSettingsProvider.dll' -print0)
+for branch in Roaming Local; do
+    path="$WINEPREFIX/drive_c/users/abc/AppData/$branch/Autodesk/Neutron Platform/Options"
+    mkdir -p "$path"
+    cp /opt/fusion-lab/vendor/OpenGL.xml "$path/NMachineSpecificOptions.xml"
+done
+printf 'OpenGL\n' > "$FUSION_ROOT/graphics-mode"
+printf 'Factory installed, not authenticated. Seed revision %s.\n' "${FUSION_SEED_REV:-1}" > "$FUSION_ROOT/factory-install.txt"
+echo 'Fusion and Identity Manager installed. Autodesk login occurs in the runtime session.'

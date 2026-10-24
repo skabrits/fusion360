@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+source /opt/fusion-lab/bin/fusion-common
+
+printf '%s Fusion hard restart requested.\n' "$(date -u +%FT%TZ)" >> "$FUSION_ROOT/logs/session.log"
+
+# Prefix-local clean restart: this is the short deterministic equivalent of
+# manually doing wineserver -k, waiting for shutdown, then fusion-run.
+"$WINESERVER" -k >/dev/null 2>&1 || true
+if ! timeout --kill-after=5s 20s "$WINESERVER" -w >/dev/null 2>&1; then
+    printf '%s Fusion restart: wineserver did not quiesce within 20s; continuing with launch.\n' \
+        "$(date -u +%FT%TZ)" >> "$FUSION_ROOT/logs/session.log"
+fi
+
+exec /opt/fusion-lab/bin/fusion-run

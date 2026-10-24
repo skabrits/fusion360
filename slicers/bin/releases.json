@@ -1,0 +1,16 @@
+[
+  {
+    "name": "bambustudio",
+    "binary": "bambu-studio",
+    "version": "v02.08.02.61",
+    "url": "https://github.com/bambulab/BambuStudio/releases/download/v02.08.02.61/BambuStudio_ubuntu24.04-v02.08.02.61-20260820225108.AppImage",
+    "sha256": "d501b103fac5424513ec0e8d6bc145fb30719de2c7d94d7320d723740c81a7fd"
+  },
+  {
+    "name": "orcaslicer",
+    "binary": "orca-slicer",
+    "version": "v2.4.2",
+    "url": "https://github.com/OrcaSlicer/OrcaSlicer/releases/download/v2.4.2/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.4.2.AppImage",
+    "sha256": "d12fb8c8eac1aecd2dfb6377acd48f994f8fa439ed5292fa532dd82880f029fd"
+  }
+]

@@ -1,0 +1,9 @@
+.git
+.gitignore
+.env
+build.log
+*.zip
+*.tar
+*.tar.gz
+__pycache__/
+*.pyc

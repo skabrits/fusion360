@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+source /opt/fusion-lab/bin/fusion-common
+apps=/config/.local/share/applications
+mkdir -p "$apps"
+cat > "$apps/fusion-adskidmgr.desktop" <<'DESKTOP'
+[Desktop Entry]
+Type=Application
+Name=Fusion Autodesk Login
+Exec=/opt/fusion-lab/bin/fusion-login %u
+Terminal=false
+NoDisplay=true
+MimeType=x-scheme-handler/adskidmgr;
+DESKTOP
+cat > "$apps/fusion-lab.desktop" <<'DESKTOP'
+[Desktop Entry]
+Type=Application
+Name=Autodesk Fusion
+Exec=/usr/local/bin/fusion-run
+Terminal=false
+Categories=Graphics;
+DESKTOP
+update-desktop-database "$apps"
+xdg-mime default fusion-adskidmgr.desktop x-scheme-handler/adskidmgr
+# GLib/XFCE callers use the same association; failure remains visible in session.log.
+gio mime x-scheme-handler/adskidmgr fusion-adskidmgr.desktop

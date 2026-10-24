@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Autodesk Fusion
+Comment=Launch Autodesk Fusion 360
+Exec=/opt/fusion-lab/bin/fusion-run
+Icon=autodesk-fusion
+Terminal=false
+Categories=Graphics;3DGraphics;Engineering;
+StartupNotify=true
+Actions=Restart;
+
+[Desktop Action Restart]
+Name=Restart Fusion
+Exec=/opt/fusion-lab/bin/fusion-restart

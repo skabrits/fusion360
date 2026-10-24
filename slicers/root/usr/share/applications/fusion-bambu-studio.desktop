@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Bambu Studio
+Comment=Prepare and slice 3D models
+Exec=/usr/local/bin/bambu-studio %F
+Icon=/opt/bambustudio/BambuStudio.png
+Terminal=false
+Categories=Graphics;3DGraphics;Engineering;
+MimeType=model/stl;model/3mf;
+StartupNotify=false

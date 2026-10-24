@@ -1,0 +1,62 @@
+name: fusion360
+services:
+  fusion:
+    platform: linux/amd64
+    image: ${FUSION_IMAGE:-skabrits/fusion360:3.3.0}
+    build:
+      context: .
+      target: final
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
+      args:
+        BASE_IMAGE: ${BASE_IMAGE:-lscr.io/linuxserver/webtop:ubuntu-xfce}
+        WINE_PACKAGE_VERSION: ${WINE_PACKAGE_VERSION:-11.18~resolute-1}
+        WINE_SOURCE_VERSION: ${WINE_SOURCE_VERSION:-11.18}
+        WINE_STAGING_VERSION: ${WINE_STAGING_VERSION:-11.18}
+        WINE_BUILD_JOBS: ${WINE_BUILD_JOBS:-4}
+        FUSION_SEED_REV: ${FUSION_SEED_REV:-1}
+        HTTP_PROXY: ${BUILD_PROXY:-}
+        HTTPS_PROXY: ${BUILD_PROXY:-}
+        http_proxy: ${BUILD_PROXY:-}
+        https_proxy: ${BUILD_PROXY:-}
+        NO_PROXY: localhost,127.0.0.1,::1
+        no_proxy: localhost,127.0.0.1,::1
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: Etc/UTC
+      CUSTOM_USER: fusion
+      PASSWORD: ${FUSION_PASSWORD:?Set FUSION_PASSWORD in .env}
+      TITLE: Autodesk Fusion
+      FUSION_AUTOSTART: "1"
+      FUSION_PROXY_URL: ${FUSION_PROXY_URL:-}
+      FUSION_WINDOW_MANAGED: ${FUSION_WINDOW_MANAGED:-Y}
+      FUSION_UNMANAGE_OWNED_WINDOWS: ${FUSION_UNMANAGE_OWNED_WINDOWS:-N}
+      FUSION_WINDOW_POLICY: ${FUSION_WINDOW_POLICY:-Y}
+      FUSION_WINDOW_DECORATED: ${FUSION_WINDOW_DECORATED:-Y}
+      FUSION_USE_TAKE_FOCUS: ${FUSION_USE_TAKE_FOCUS:-N}
+      FUSION_UI_API: ${FUSION_UI_API:-OpenGL}
+      FUSION_WEBVIEW2_DISABLE_GPU: ${FUSION_WEBVIEW2_DISABLE_GPU:-0}
+      FUSION_WEBVIEW2_NO_SANDBOX: ${FUSION_WEBVIEW2_NO_SANDBOX:-1}
+      FUSION_QTWEBENGINE_DISABLE_GPU: ${FUSION_QTWEBENGINE_DISABLE_GPU:-0}
+      FUSION_QTWEBENGINE_NO_SANDBOX: ${FUSION_QTWEBENGINE_NO_SANDBOX:-0}
+      FUSION_WEBVIEW2_WINVER: ${FUSION_WEBVIEW2_WINVER:-win8}
+      SLICERS_USE_PROXY: ${SLICERS_USE_PROXY:-0}
+      SLICERS_SOFTWARE_RENDERING: ${SLICERS_SOFTWARE_RENDERING:-0}
+      BAMBUDDY_CERT_FILE: ${BAMBUDDY_CERT_FILE:-}
+    ports:
+      - "${BIND_ADDRESS:-0.0.0.0}:${WEB_PORT:-3081}:3001"
+    volumes:
+      - fusion-config:/config
+    shm_size: 2gb
+    mem_limit: ${FUSION_MEMORY_LIMIT:-8g}
+    memswap_limit: ${FUSION_MEMORY_LIMIT:-8g}
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+volumes:
+  fusion-config:
+    name: ${FUSION_VOLUME:-fusion360_config}

@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+source /opt/fusion-lab/bin/fusion-common
+key='HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings'
+active=0
+[[ ! -s /run/fusion-proxy/gost.json ]] || active=1
+for view in 32 64; do
+    timeout 30s "$WINE" reg add "$key" /v ProxyEnable /t REG_DWORD /d "$active" /f "/reg:$view"
+    if [[ $active = 1 ]]; then
+        timeout 30s "$WINE" reg add "$key" /v ProxyServer /t REG_SZ /d 'http=127.0.0.1:8889;https=127.0.0.1:8889' /f "/reg:$view"
+        timeout 30s "$WINE" reg add "$key" /v ProxyOverride /t REG_SZ /d 'localhost;127.0.0.1;[::1]' /f "/reg:$view"
+    fi
+done

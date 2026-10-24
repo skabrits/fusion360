@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+case "$(basename "$0")" in
+    bambu-studio) app=/opt/bambustudio ;;
+    orca-slicer) app=/opt/orcaslicer ;;
+    *) echo 'Run bambu-studio or orca-slicer.' >&2; exit 2 ;;
+esac
+# Native applications use abc's persistent HOME, not the Wine prefix.
+export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
+export XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+mkdir -p "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" "$XDG_DATA_HOME"
+unset APPDIR APPIMAGE LD_LIBRARY_PATH LD_PRELOAD
+unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy FUSION_PROXY_URL
+# Direct by default for LAN printing. Optional existing in-container GOST proxy.
+if [[ ${SLICERS_USE_PROXY:-0} == 1 ]]; then
+    [[ -s /run/fusion-proxy/gost.json ]] || { echo 'SLICERS_USE_PROXY requires the internal Fusion proxy to be enabled.' >&2; exit 1; }
+    export http_proxy=http://127.0.0.1:8889 https_proxy=http://127.0.0.1:8889
+    export HTTP_PROXY="$http_proxy" HTTPS_PROXY="$https_proxy"
+fi
+export no_proxy="${no_proxy:-${NO_PROXY:-localhost,127.0.0.1,::1}}"
+export NO_PROXY="$no_proxy"
+export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+if [[ -s /run/slicer-certs/ca-bundle.pem ]]; then
+    export SSL_CERT_FILE=/run/slicer-certs/ca-bundle.pem
+    export CURL_CA_BUNDLE="$SSL_CERT_FILE"
+fi
+export GDK_BACKEND=x11
+export WEBKIT_DISABLE_DMABUF_RENDERER=1
+if [[ ${SLICERS_SOFTWARE_RENDERING:-0} == 1 ]]; then
+    export LIBGL_ALWAYS_SOFTWARE=1
+fi
+cd "$HOME"
+exec "$app/AppRun" "$@"

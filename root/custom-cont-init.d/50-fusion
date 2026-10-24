@@ -1,0 +1,22 @@
+#!/usr/bin/with-contenv bash
+set -Eeuo pipefail
+# LinuxServer runs custom init after abc UID/GID have been assigned, before desktop starts.
+# Create every parent explicitly with abc ownership.  `install -d` on only the
+# leaf previously left newly-created .local/.local/share parents root-owned on
+# some fresh/preserved /config layouts, so abc could not later create icons/.
+install -d -o abc -g abc \
+  /config/.local \
+  /config/.local/share \
+  /config/.local/share/applications \
+  /config/.local/share/icons \
+  /config/.local/share/icons/hicolor \
+  /config/.local/share/icons/hicolor/256x256 \
+  /config/.local/share/icons/hicolor/256x256/apps \
+  /config/.config \
+  /config/.config/autostart \
+  /config/Desktop
+runuser -u abc -- python3 /opt/fusion-lab/bin/fusion-seed.py /config /opt/fusion-seed
+# Install managed autostart even on an existing desktop profile.
+install -o abc -g abc -m 0644 /etc/xdg/autostart/fusion.desktop /config/.config/autostart/fusion.desktop
+# Always provide a clickable XFCE launcher. The helper extracts Fusion's embedded icon when possible.
+runuser -u abc -- python3 /opt/fusion-lab/bin/fusion-desktop.py

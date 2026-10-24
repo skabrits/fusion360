@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OptionGroups>
+  <BootstrapOptionsGroup SchemaVersion="2" ToolTip="Graphics" UserName="Bootstrap">
+    <driverOptionId ToolTip="Graphics driver" UserName="Graphics driver" Value="VirtualDeviceGLCore"/>
+  </BootstrapOptionsGroup>
+</OptionGroups>

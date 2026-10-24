@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Autodesk Fusion
+Exec=/opt/fusion-lab/bin/fusion-session
+Terminal=false
+X-GNOME-Autostart-enabled=true

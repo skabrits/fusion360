@@ -1,0 +1,7 @@
+#!/usr/bin/with-contenv bash
+set -eu
+if [[ ! -s /run/fusion-proxy/gost.json ]]; then
+    exec sleep infinity
+fi
+unset FUSION_PROXY_URL HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy
+exec s6-setuidgid abc /usr/local/bin/gost -C /run/fusion-proxy/gost.json

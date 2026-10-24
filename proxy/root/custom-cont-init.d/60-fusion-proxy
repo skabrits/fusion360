@@ -1,0 +1,3 @@
+#!/usr/bin/with-contenv bash
+set -eu
+python3 /opt/fusion-lab/bin/fusion-proxy-config.py

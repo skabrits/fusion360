@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+source /opt/fusion-lab/bin/fusion-common
+exec >> "$FUSION_ROOT/logs/session.log" 2>&1
+[[ ${FUSION_AUTOSTART:-1} = 1 ]] || exit 0
+for attempt in $(seq 1 60); do
+    if [[ -n ${DISPLAY:-} ]] && xdpyinfo >/dev/null 2>&1; then
+        exec /opt/fusion-lab/bin/fusion-run
+    fi
+    sleep 1
+done
+echo 'No usable desktop display after 60 seconds; launch fusion-run from the desktop terminal.'
+exit 1

@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Sourced after fusion-common, never during installation.
+unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy
+export NO_PROXY=localhost,127.0.0.1,::1
+export no_proxy="$NO_PROXY"
+if [[ -s /run/fusion-proxy/gost.json ]]; then
+    export HTTP_PROXY=http://127.0.0.1:8889 HTTPS_PROXY=http://127.0.0.1:8889
+    export http_proxy="$HTTP_PROXY" https_proxy="$HTTPS_PROXY"
+    fusion_proxy_on=1
+    python3 - <<'PY'
+import socket,time,sys
+for _ in range(100):
+    try:
+        with socket.create_connection(('127.0.0.1',8889), timeout=.2): pass
+        break
+    except OSError: time.sleep(.2)
+else: sys.exit('Internal proxy did not start; see docker compose logs. Fusion was not launched.')
+PY
+else
+    fusion_proxy_on=0
+fi
+# Drop old proxy switches but retain unrelated rendering/debug switches.
+for fusion_flags in WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS QTWEBENGINE_CHROMIUM_FLAGS; do
+    fusion_value=$(python3 - "$fusion_flags" "$fusion_proxy_on" <<'PY'
+import os,shlex,sys
+args=shlex.split(os.environ.get(sys.argv[1],''))
+clean=[];skip=False
+names={'--proxy-server','--proxy-pac-url','--proxy-bypass-list','--no-proxy-server','--proxy-auto-detect'}
+for arg in args:
+    if skip: skip=False;continue
+    key=arg.split('=',1)[0]
+    if key in names:
+        skip=('=' not in arg and key in {'--proxy-server','--proxy-pac-url','--proxy-bypass-list'})
+    else: clean.append(arg)
+clean.append('--proxy-server=http://127.0.0.1:8889' if sys.argv[2]=='1' else '--no-proxy-server')
+print(shlex.join(clean))
+PY
+)
+    export "$fusion_flags=$fusion_value"
+done
+unset FUSION_PROXY_URL fusion_flags fusion_value

@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+source /opt/fusion-lab/bin/fusion-common
+export WINEARCH=win64
+# Keep errors visible for this diagnostic even though normal launches are quiet.
+export WINEDEBUG=-all,+timestamp,err+all
+# Scope these overrides to this helper process, not to .NET install or Fusion.
+export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:+$WINEDLLOVERRIDES;}mscoree,mshtml="
+diagnostics() {
+    echo "Prefix check failed during: $1 (exit $2)" >&2
+    timeout 10s xwininfo -root -tree >&2 || true
+    ps -eo pid,ppid,stat,etime,comm >&2 || true
+    ls -l "$WINEPREFIX/system.reg" \
+        "$WINEPREFIX/drive_c/windows/syswow64/regedit.exe" \
+        "$WINEPREFIX/drive_c/windows/regedit.exe" >&2 || true
+}
+echo 'Initializing Wine prefix with Mono/Gecko prompts disabled'
+status=0
+timeout --kill-after=10s 180s "$WINE" wineboot --init || status=$?
+if (( status != 0 )); then
+    diagnostics wineboot "$status"
+    exit "$status"
+fi
+# wineboot can return before prefix setup finishes. Never use an unbounded wait.
+if ! timeout --kill-after=10s 180s "$WINESERVER" -w; then
+    diagnostics wineserver-w 'timeout or server failure'
+    echo 'Wine initialization did not finish within 180 seconds; refusing an incomplete prefix.' >&2
+    exit 1
+fi
+test -s "$WINEPREFIX/system.reg"
+test -L "$WINEPREFIX/dosdevices/c:"
+test -L "$WINEPREFIX/dosdevices/z:"
+mkdir -p "$WINEPREFIX/drive_c/windows/temp"
+probe="$WINEPREFIX/drive_c/windows/temp/fusion-prefix-check.reg"
+printf 'Windows Registry Editor Version 5.00\r\n\r\n[HKEY_CURRENT_USER\\Software\\FusionImageBuildProbe]\r\n"Ready"="yes"\r\n' > "$probe"
+for editor in 'C:\windows\syswow64\regedit.exe' 'C:\windows\regedit.exe'; do
+    echo "Checking $editor"
+    if ! timeout --kill-after=10s 60s "$WINE" "$editor" /S 'C:\windows\temp\fusion-prefix-check.reg'; then
+        echo "Wine cannot run $editor before Winetricks; check Wine installation and prefix initialization." >&2
+        ls -l "$WINEPREFIX/drive_c/windows/syswow64/regedit.exe" \
+              "$WINEPREFIX/drive_c/windows/regedit.exe" \
+              "$WINEPREFIX/drive_c/windows/syswow64/ntdll.dll" >&2 || true
+        exit 1
+    fi
+done
+timeout --kill-after=10s 60s "$WINE" reg delete 'HKCU\Software\FusionImageBuildProbe' /f
+rm "$probe"

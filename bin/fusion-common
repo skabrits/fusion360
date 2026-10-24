@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+[[ $(id -un) = abc ]] || { echo 'Run Fusion as abc inside the desktop.' >&2; exit 1; }
+export TZ=Etc/UTC
+export FUSION_ROOT=/config/.autodesk_fusion
+export WINEPREFIX="$FUSION_ROOT/wineprefixes/default"
+export WINE="${FUSION_WINE_BIN:-wine}"
+if [[ "$WINE" = /* ]]; then
+    export WINESERVER="$(dirname "$WINE")/wineserver"
+else
+    export WINESERVER=wineserver
+fi
+export WINEDEBUG="${WINEDEBUG:--all}"
+export USER=abc
+mkdir -p "$FUSION_ROOT/logs"

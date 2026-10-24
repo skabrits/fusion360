@@ -1,0 +1,11 @@
+#!/usr/bin/env python3
+import os, pathlib, sys
+if len(sys.argv) != 2 or sys.argv[1] not in ('Fusion360.exe', 'AdskIdentityManager.exe'):
+    sys.exit('Expected Fusion360.exe or AdskIdentityManager.exe')
+root = pathlib.Path(os.environ['WINEPREFIX']) / 'drive_c'
+files = [p for p in root.rglob(sys.argv[1]) if p.is_file()]
+if not files:
+    sys.exit(f'{sys.argv[1]} not found in prefix')
+# Fusion updates use hashed deployment directories. Never hardcode the hash.
+files.sort(key=lambda p: (p.stat().st_mtime_ns, str(p)), reverse=True)
+print(files[0])

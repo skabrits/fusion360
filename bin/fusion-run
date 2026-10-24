@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+source /opt/fusion-lab/bin/fusion-common
+
+# Serialize only the launch/setup phase.  The lock descriptor must NOT reach
+# Wine: helper processes (WebView2/Identity Manager/etc.) may survive after the
+# main Fusion window closes and would otherwise keep .launch.lock forever.
+exec 8>"$FUSION_ROOT/.launch.lock"
+if ! flock -n 8; then
+    printf '%s Fusion launcher: another launch is already being prepared; ignoring duplicate request.\n' \
+        "$(date -u +%FT%TZ)" >> "$FUSION_ROOT/logs/session.log"
+    exit 0
+fi
+
+# Rendering flags first; proxy setup keeps these and only replaces proxy switches.
+for flagvar in QTWEBENGINE_CHROMIUM_FLAGS WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS; do
+    flagvalue=$(python3 /opt/fusion-lab/bin/flags.py "$flagvar")
+    export "$flagvar=$flagvalue"
+done
+unset flagvar flagvalue
+
+python3 /opt/fusion-lab/bin/fusion-runtime.py >> "$FUSION_ROOT/logs/session.log" 2>&1
+source /opt/fusion-lab/bin/fusion-proxy-env
+/opt/fusion-lab/bin/fusion-proxy-wine >> "$FUSION_ROOT/logs/session.log" 2>&1
+/opt/fusion-lab/bin/fusion-register >> "$FUSION_ROOT/logs/session.log" 2>&1
+
+exe=$(/opt/fusion-lab/bin/find-fusion-exe Fusion360.exe)
+cd "$(dirname "$exe")"
+printf '\n=== Fusion launch %s ===\n' "$(date -u +%FT%TZ)" >> "$FUSION_ROOT/logs/fusion.log"
+
+# Release AND close fd 8 before starting Wine.  `flock -u` alone is not enough:
+# an open inherited descriptor can be carried by long-lived Wine helpers.
+flock -u 8
+exec 8>&-
+exec "$WINE" "$exe" >> "$FUSION_ROOT/logs/fusion.log" 2>&1

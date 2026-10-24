@@ -1,0 +1,7 @@
+#!/usr/bin/with-contenv bash
+set -euo pipefail
+# Make shortcuts visible even on an existing persistent desktop profile.
+install -d -o abc -g abc /config/Desktop
+for app in bambu-studio orca-slicer; do
+    install -o abc -g abc -m 0755 "/usr/share/applications/fusion-$app.desktop" "/config/Desktop/fusion-$app.desktop"
+done
