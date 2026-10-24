@@ -187,7 +187,7 @@ RUN --mount=type=cache,id=fusion-v3-slicers,target=/var/cache/fusion-slicers,sha
 
 LABEL org.opencontainers.image.title="Autodesk Fusion 360 + Selkies" \
       org.opencontainers.image.version="3.3.1" \
-      org.opencontainers.image.description="Fusion/Wine with managed main window, universal auxiliary-window stacking policy, browser fixes, Selkies, slicers, proxy and printer CA support"
+      org.opencontainers.image.description="Fusion/Wine with managed main window, universal auxiliary-window stacking policy, browser fixes, Selkies, slicers, proxy and printer CA support" \
       org.opencontainers.image.authors="seva.kabrits@gmail.com"
 
 # LinuxServer Webtop supplies /init. /config stays persistent and receives the factory seed on first start.
