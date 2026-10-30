@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Thin-image adapter that leaves the existing Fusion launcher unchanged.
+# Used only by Dockerfile.gpu; full source builds use fusion-run directly.
+set -Eeuo pipefail
+[[ $(id -un) = abc ]] || { echo 'Run Fusion as abc inside the desktop.' >&2; exit 1; }
+FUSION_ROOT=/config/.autodesk_fusion
+mkdir -p "$FUSION_ROOT/logs"
+source /opt/fusion-lab/bin/fusion-graphics
+fusion_graphics_setup >> "$FUSION_ROOT/logs/session.log" 2>&1
+exec /opt/fusion-lab/bin/fusion-run-base "$@"

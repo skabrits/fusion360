@@ -17,7 +17,7 @@ Consider visiting [source repo](https://github.com/skabrits/fusion360) for more 
 - Autodesk Identity Manager / browser sign-in support
 - Bambu Studio
 - OrcaSlicer
-- Optional Intel/AMD GPU acceleration
+- Optional Intel/AMD and NVIDIA GPU acceleration
 - Optional HTTP/HTTPS/SOCKS5 upstream proxy
 - Persistent Fusion configuration and Autodesk login
 - Fusion desktop launcher
@@ -50,7 +50,7 @@ Create `compose.yaml`:
 ```yaml
 services:
   fusion:
-    image: skabrits/fusion360:3.3.1
+    image: skabrits/fusion360:3.4.0
     container_name: fusion360
     platform: linux/amd64
 
@@ -165,7 +165,9 @@ docker compose up -d
 
 # GPU acceleration
 
-## Intel / AMD
+GPU acceleration is optional. Without a GPU, the desktop and Fusion can use CPU rendering (Mesa llvmpipe). The LinuxServer Webtop/Selkies base image detects available GPUs, but **Docker must expose the host's GPU devices and, for proprietary NVIDIA drivers, matching driver libraries**.
+
+## Intel / AMD (Linux)
 
 Pass `/dev/dri` into the container:
 
@@ -174,10 +176,8 @@ services:
   fusion:
     devices:
       - /dev/dri:/dev/dri
-
-    group_add:
-      - video
-      - render
+    environment:
+      DISABLE_DRI3: "false"
 ```
 
 A complete example:
@@ -185,7 +185,7 @@ A complete example:
 ```yaml
 services:
   fusion:
-    image: skabrits/fusion360:3.3.1
+    image: skabrits/fusion360:3.4.0
     platform: linux/amd64
 
     environment:
@@ -194,6 +194,7 @@ services:
       CUSTOM_USER: fusion
       PASSWORD: change-me
       FUSION_AUTOSTART: "1"
+      DISABLE_DRI3: "false"
 
     ports:
       - "3081:3001"
@@ -204,10 +205,6 @@ services:
     devices:
       - /dev/dri:/dev/dri
 
-    group_add:
-      - video
-      - render
-
     shm_size: 2gb
     mem_limit: 8g
 
@@ -217,7 +214,39 @@ volumes:
   fusion360_config:
 ```
 
-NVIDIA requires NVIDIA Container Toolkit configuration on the host and is not configured automatically by this image.
+Selkies normally configures access to detected DRM render nodes automatically. If multiple GPUs are present, `DRINODE` can select the rendering device (for example, `/dev/dri/renderD128`).
+
+## NVIDIA (Linux, proprietary driver)
+
+Install and configure the NVIDIA driver and NVIDIA Container Toolkit on the Docker host. LinuxServer's Webtop GPU guide requires driver version **580 or newer** and recommends passing `/dev/nvidia-modeset` for Vulkan support. Drivers 580–594 may also require `nvidia-drm.modeset=1 nvidia_drm.fbdev=1` on the host; see the [LinuxServer GPU guide](https://docs.linuxserver.io/selkies/user-guide/gpu/).
+
+Add these settings to the `fusion` service in the quick-start Compose file:
+
+```yaml
+services:
+  fusion:
+    runtime: nvidia
+    gpus: all
+    devices:
+      - /dev/nvidia-modeset:/dev/nvidia-modeset
+    environment:
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility,graphics,display,video
+      DISABLE_ZINK: "true"
+      __GLX_VENDOR_LIBRARY_NAME: nvidia
+      WINE_D3D_CONFIG: renderer=vulkan
+```
+
+The last three variables avoid the Mesa Zink OpenGL path and use native NVIDIA GLX with WineD3D's Vulkan renderer. This combination was verified with a GTX 1050 Ti; other GPUs and drivers may behave differently. Do **not** use the NVIDIA settings on a CPU-only host.
+
+To check rendering inside the desktop terminal:
+
+```bash
+glxinfo -B | grep -E 'OpenGL vendor|OpenGL renderer'
+```
+
+An accelerated NVIDIA setup should identify `NVIDIA Corporation` and the GPU, not `llvmpipe`. `nvidia-smi` alone proves device visibility, not OpenGL acceleration.
+
+On Windows with Docker Desktop/WSL2, these native-Linux `/dev/dri` and NVIDIA GLX instructions do not directly apply; GPU-accelerated rendering has not been validated for this image there.
 
 ---
 
@@ -307,6 +336,9 @@ The image runs an internal local proxy forwarder for Fusion when this option is 
 | `FUSION_PROXY_URL` | empty | Optional HTTP/HTTPS/SOCKS5 proxy |
 | `SLICERS_USE_PROXY` | `0` | Route slicer HTTP traffic through the Fusion proxy |
 | `SLICERS_SOFTWARE_RENDERING` | `0` | Force software rendering for slicers |
+| `DISABLE_DRI3` | unset | Set to `false` to enable GPU-backed Xvfb where supported |
+| `DISABLE_ZINK` | unset | Set to `true` for native NVIDIA OpenGL instead of forced Zink |
+| `WINE_D3D_CONFIG` | unset | Use `renderer=vulkan` with the tested NVIDIA configuration |
 
 The default web port inside the container is:
 

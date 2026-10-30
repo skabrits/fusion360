@@ -8,10 +8,19 @@ docker compose version >/dev/null
 password=$(sed -n 's/^FUSION_PASSWORD=//p' .env | tail -n1)
 [[ -n "$password" && "$password" != CHANGE_ME ]] || { echo 'Set FUSION_PASSWORD in .env.' >&2; exit 1; }
 args=(-f compose.yaml)
-if [[ ${FUSION_GPU:-0} == 1 ]]; then
-  [[ -d /dev/dri ]] || { echo '/dev/dri is absent; cannot enable GPU override.' >&2; exit 1; }
-  args+=(-f compose.gpu.yaml)
-fi
+# Docker GPU access is selected independently of Fusion's automatic GLX backend.
+# 0/cpu: no GPU; 1/dri: direct /dev/dri; nvidia: NVIDIA Container Toolkit.
+case "${FUSION_GPU:-0}" in
+  0|cpu|none) ;;
+  1|dri)
+    [[ -d /dev/dri ]] || { echo '/dev/dri is absent; cannot enable direct DRM GPU access.' >&2; exit 1; }
+    args+=(-f compose.gpu.yaml)
+    ;;
+  nvidia|toolkit)
+    args+=(-f compose.nvidia.yaml)
+    ;;
+  *) echo 'FUSION_GPU must be 0, cpu, 1, dri, nvidia, or toolkit.' >&2; exit 2 ;;
+esac
 docker compose "${args[@]}" config --quiet
 docker compose --progress plain "${args[@]}" build 2>&1 | tee build.log
 docker compose "${args[@]}" up -d --no-build

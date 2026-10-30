@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+# Source from fusion-run. Choose Fusion's renderer per launch, without modifying
+# the Selkies/Xvfb process or persisting graphics settings in the Wine prefix.
+# Modes: auto (default), cpu, nvidia, dri.  NVIDIA does not require a particular
+# Docker runtime: it requires accessible devices AND working NVIDIA userspace GLX.
+
+fusion_graphics_has_nvidia_device() {
+    local dev
+    for dev in /dev/nvidia[0-9]*; do
+        [[ -c "$dev" ]] && return 0
+    done
+    return 1
+}
+
+fusion_graphics_has_dri_device() {
+    local dev
+    for dev in /dev/dri/renderD*; do
+        [[ -c "$dev" ]] && return 0
+    done
+    return 1
+}
+
+# Do not let Selkies' Zink policy or an old software-rendering override bias
+# detection of an alternate GLX implementation.
+fusion_graphics_probe_clean() {
+    env -u MESA_LOADER_DRIVER_OVERRIDE -u GALLIUM_DRIVER \
+        -u LIBGL_KOPPER_DRI2 -u LIBGL_ALWAYS_SOFTWARE \
+        -u __GLX_VENDOR_LIBRARY_NAME \
+        "$@" timeout 7s glxinfo -B 2>/dev/null
+}
+
+fusion_graphics_probe_nvidia() {
+    fusion_graphics_probe_clean __GLX_VENDOR_LIBRARY_NAME=nvidia
+}
+
+fusion_graphics_probe_zink() {
+    env -u LIBGL_ALWAYS_SOFTWARE -u __GLX_VENDOR_LIBRARY_NAME \
+        MESA_LOADER_DRIVER_OVERRIDE=zink GALLIUM_DRIVER=zink \
+        LIBGL_KOPPER_DRI2=1 timeout 7s glxinfo -B 2>/dev/null
+}
+
+fusion_graphics_hardware_gl() {
+    local glx="$1"
+    [[ -n "$glx" ]] || return 1
+    grep -q '^OpenGL renderer string:' <<< "$glx" || return 1
+    grep -Eiq '^OpenGL renderer string:.*(llvmpipe|softpipe|swrast|software rasterizer)' <<< "$glx" && return 1
+    # Mesa reports Accelerated: yes; proprietary drivers typically do not.
+    if grep -q 'Accelerated:' <<< "$glx"; then
+        grep -Eq 'Accelerated:[[:space:]]+yes' <<< "$glx" || return 1
+    fi
+    return 0
+}
+
+fusion_graphics_setup() {
+    local requested="${FUSION_RENDER_MODE:-auto}" choice="" mesa_impl="" glx="" renderer=""
+    case "$requested" in
+        auto|cpu|nvidia|dri) ;;
+        *) echo "Fusion graphics: invalid FUSION_RENDER_MODE=$requested (expected auto|cpu|nvidia|dri)" >&2; return 2 ;;
+    esac
+
+    if [[ "$requested" == auto || "$requested" == nvidia ]]; then
+        if fusion_graphics_has_nvidia_device; then
+            glx="$(fusion_graphics_probe_nvidia || true)"
+            if grep -q '^OpenGL vendor string: NVIDIA Corporation' <<< "$glx" &&
+               grep -Eq '^OpenGL renderer string: NVIDIA ' <<< "$glx"; then
+                choice=nvidia
+            fi
+        fi
+        if [[ "$requested" == nvidia && "$choice" != nvidia ]]; then
+            echo 'Fusion graphics: native NVIDIA GLX unavailable (check injected driver libraries/devices and DISPLAY).' >&2
+            return 1
+        fi
+    fi
+
+    if [[ -z "$choice" && ( "$requested" == auto || "$requested" == dri ) ]] && fusion_graphics_has_dri_device; then
+        glx="$(fusion_graphics_probe_clean || true)"
+        if fusion_graphics_hardware_gl "$glx" && ! grep -Eqi '^OpenGL renderer string:.*zink.*NVIDIA' <<< "$glx"; then
+            choice=dri; mesa_impl=native
+        else
+            glx="$(fusion_graphics_probe_zink || true)"
+            # NVIDIA via Zink is specifically known to hang Fusion on this image.
+            if fusion_graphics_hardware_gl "$glx" && ! grep -Eqi '^OpenGL renderer string:.*zink.*NVIDIA' <<< "$glx"; then
+                choice=dri; mesa_impl=zink
+            fi
+        fi
+    fi
+
+    if [[ "$requested" == dri && "$choice" != dri ]]; then
+        echo 'Fusion graphics: no working accelerated Mesa GLX renderer detected on /dev/dri.' >&2
+        return 1
+    fi
+    [[ -n "$choice" ]] || choice=cpu
+    [[ "$requested" != cpu ]] || choice=cpu
+
+    case "$choice" in
+        cpu)
+            unset MESA_LOADER_DRIVER_OVERRIDE LIBGL_KOPPER_DRI2 __GLX_VENDOR_LIBRARY_NAME
+            export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
+            # Never carry a GPU-specific WineD3D override from this selector.
+            ;;
+        nvidia)
+            unset MESA_LOADER_DRIVER_OVERRIDE GALLIUM_DRIVER LIBGL_KOPPER_DRI2 LIBGL_ALWAYS_SOFTWARE
+            export __GLX_VENDOR_LIBRARY_NAME=nvidia
+            # The exact combination verified on NVIDIA GTX 1050 Ti in this image.
+            export WINE_D3D_CONFIG="${WINE_D3D_CONFIG:-renderer=vulkan}"
+            ;;
+        dri)
+            unset LIBGL_ALWAYS_SOFTWARE __GLX_VENDOR_LIBRARY_NAME
+            if [[ "$mesa_impl" == native ]]; then
+                unset MESA_LOADER_DRIVER_OVERRIDE GALLIUM_DRIVER LIBGL_KOPPER_DRI2
+            else
+                export MESA_LOADER_DRIVER_OVERRIDE=zink GALLIUM_DRIVER=zink LIBGL_KOPPER_DRI2=1
+            fi
+            # Do not assume Vulkan WineD3D works on untested Intel/AMD hosts;
+            # they retain the image's normal WineD3D backend by default.
+            ;;
+    esac
+    export FUSION_RENDER_SELECTED="$choice"
+    export FUSION_RENDER_MESA_IMPL="$mesa_impl"
+    echo "Fusion graphics: requested=$requested selected=$choice mesa=${mesa_impl:-none} DISPLAY=${DISPLAY:-unset}"
+    echo "Fusion graphics: GLX_VENDOR=${__GLX_VENDOR_LIBRARY_NAME:-default} GALLIUM_DRIVER=${GALLIUM_DRIVER:-default} MESA_LOADER_DRIVER_OVERRIDE=${MESA_LOADER_DRIVER_OVERRIDE:-default} WINE_D3D_CONFIG=${WINE_D3D_CONFIG:-default}"
+}

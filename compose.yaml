@@ -2,7 +2,7 @@ name: fusion360
 services:
   fusion:
     platform: linux/amd64
-    image: ${FUSION_IMAGE:-skabrits/fusion360:3.3.1}
+    image: ${FUSION_IMAGE:-skabrits/fusion360:3.4.0}
     build:
       context: .
       target: final
@@ -10,7 +10,6 @@ services:
         - "host.docker.internal:host-gateway"
       args:
         BASE_IMAGE: ${BASE_IMAGE:-lscr.io/linuxserver/webtop:ubuntu-xfce}
-        WINE_PACKAGE_VERSION: ${WINE_PACKAGE_VERSION:-11.18~resolute-1}
         WINE_SOURCE_VERSION: ${WINE_SOURCE_VERSION:-11.18}
         WINE_STAGING_VERSION: ${WINE_STAGING_VERSION:-11.18}
         WINE_BUILD_JOBS: ${WINE_BUILD_JOBS:-4}
@@ -29,6 +28,7 @@ services:
       PASSWORD: ${FUSION_PASSWORD:?Set FUSION_PASSWORD in .env}
       TITLE: Autodesk Fusion
       FUSION_AUTOSTART: "1"
+      FUSION_RENDER_MODE: ${FUSION_RENDER_MODE:-auto}
       FUSION_PROXY_URL: ${FUSION_PROXY_URL:-}
       FUSION_WINDOW_MANAGED: ${FUSION_WINDOW_MANAGED:-Y}
       FUSION_UNMANAGE_OWNED_WINDOWS: ${FUSION_UNMANAGE_OWNED_WINDOWS:-N}

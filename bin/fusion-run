@@ -11,6 +11,11 @@ if ! flock -n 8; then
     exit 0
 fi
 
+# Select a working Wine/GLX graphics backend on every launch.  In particular,
+# never inherit forced Zink for a usable native NVIDIA GLX implementation.
+source /opt/fusion-lab/bin/fusion-graphics
+fusion_graphics_setup >> "$FUSION_ROOT/logs/session.log" 2>&1
+
 # Rendering flags first; proxy setup keeps these and only replaces proxy switches.
 for flagvar in QTWEBENGINE_CHROMIUM_FLAGS WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS; do
     flagvalue=$(python3 /opt/fusion-lab/bin/flags.py "$flagvar")

@@ -1,0 +1,9 @@
+# NVIDIA Container Toolkit overlay. Use WITH compose.yaml, not on its own:
+#   docker compose -f compose.yaml -f compose.nvidia.yaml up -d
+# Native NVIDIA OpenGL + WineD3D Vulkan is selected automatically by fusion-run.
+services:
+  fusion:
+    gpus: all
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: graphics,display,utility,video,compute
