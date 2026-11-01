@@ -50,7 +50,7 @@ Create `compose.yaml`:
 ```yaml
 services:
   fusion:
-    image: skabrits/fusion360:3.4.0
+    image: skabrits/fusion360:3.4.1
     container_name: fusion360
     platform: linux/amd64
 
@@ -185,7 +185,7 @@ A complete example:
 ```yaml
 services:
   fusion:
-    image: skabrits/fusion360:3.4.0
+    image: skabrits/fusion360:3.4.1
     platform: linux/amd64
 
     environment:
@@ -232,11 +232,12 @@ services:
     environment:
       NVIDIA_DRIVER_CAPABILITIES: compute,utility,graphics,display,video
       DISABLE_ZINK: "true"
-      __GLX_VENDOR_LIBRARY_NAME: nvidia
       WINE_D3D_CONFIG: renderer=vulkan
 ```
 
-The last three variables avoid the Mesa Zink OpenGL path and use native NVIDIA GLX with WineD3D's Vulkan renderer. This combination was verified with a GTX 1050 Ti; other GPUs and drivers may behave differently. Do **not** use the NVIDIA settings on a CPU-only host.
+The last two variables avoid the Mesa Zink OpenGL path and use native NVIDIA GLX with WineD3D's Vulkan renderer. This combination was verified with a GTX 1050 Ti; other GPUs and drivers may behave differently. Do **not** use the NVIDIA settings on a CPU-only host.
+
+For programs refusing to run on nvidia gpu one also might try setting additional environment variable: `__GLX_VENDOR_LIBRARY_NAME=nvidia`. However, setting this variable globally might result in problems with xfce compositor as nvidia implementation of GLX lacks GLX_EXT_texture_from_pixmap.
 
 To check rendering inside the desktop terminal:
 

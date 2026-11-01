@@ -2,7 +2,7 @@ name: fusion360
 services:
   fusion:
     platform: linux/amd64
-    image: ${FUSION_IMAGE:-skabrits/fusion360:3.4.0}
+    image: ${FUSION_IMAGE:-skabrits/fusion360:3.4.1}
     build:
       context: .
       target: final

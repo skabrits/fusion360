@@ -188,7 +188,7 @@ RUN set -eu; \
 ENV FUSION_RENDER_MODE=auto
 
 LABEL org.opencontainers.image.title="Autodesk Fusion 360 + Selkies" \
-      org.opencontainers.image.version="3.4.0" \
+      org.opencontainers.image.version="3.4.1" \
       org.opencontainers.image.description="Fusion/Wine with managed main window, universal auxiliary-window stacking policy, browser fixes, Selkies, slicers, proxy and printer CA support" \
       org.opencontainers.image.authors="seva.kabrits@gmail.com"
 
