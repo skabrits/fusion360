@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Read-only GPU diagnostics; actual Autodesk Graphics Diagnostic is authoritative.
+set -u
+printf '=== Fusion launcher graphics ===\n'
+tail -n 16 /config/.autodesk_fusion/logs/session.log 2>/dev/null | grep -E 'Fusion graphics:|Fusion Wine X11:' || true
+printf '\n=== GLX Mesa / native NVIDIA ===\n'
+for vendor in mesa nvidia; do
+    printf 'Vendor %s:\n' "$vendor"
+    env -u GALLIUM_DRIVER -u MESA_LOADER_DRIVER_OVERRIDE -u LIBGL_ALWAYS_SOFTWARE \
+        -u LIBGL_KOPPER_DRI2 __GLX_VENDOR_LIBRARY_NAME="$vendor" \
+        timeout 8 glxinfo -B 2>&1 | grep -E 'OpenGL vendor string:|OpenGL renderer string:|Accelerated:' || true
+done
+printf '\n=== Wine X11 UseEGL ===\n'
+"${FUSION_WINE_BIN:-/opt/wine-fusion/bin/wine}" reg query 'HKCU\Software\Wine\X11 Driver' /v UseEGL 2>&1 || true
+printf '\n=== Running Fusion process ===\n'
+pid=$(pgrep -u "$(id -u)" -f '[F]usion360[.]exe' | head -n 1 || true)
+if [[ -n "$pid" ]]; then
+    printf 'PID=%s\n' "$pid"
+    tr '\0' '\n' < "/proc/$pid/environ" | grep -E '^(__GLX_VENDOR_LIBRARY_NAME|WINE_D3D_CONFIG|GALLIUM_DRIVER|MESA_LOADER_DRIVER_OVERRIDE|LIBGL_ALWAYS_SOFTWARE|FUSION_RENDER_SELECTED)=' || true
+else
+    printf 'Fusion360.exe not running as this user.\n'
+fi
+printf '\nIMPORTANT: Check Fusion > Help > Graphics Diagnostic; a GLX probe alone does not confirm the renderer used by Fusion.\n'

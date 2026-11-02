@@ -3,6 +3,7 @@
 # Native NVIDIA OpenGL + WineD3D Vulkan is selected automatically by fusion-run.
 services:
   fusion:
+    runtime: nvidia
     gpus: all
     environment:
       NVIDIA_VISIBLE_DEVICES: all

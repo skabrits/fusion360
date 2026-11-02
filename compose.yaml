@@ -2,7 +2,7 @@ name: fusion360
 services:
   fusion:
     platform: linux/amd64
-    image: ${FUSION_IMAGE:-skabrits/fusion360:3.4.1}
+    image: ${FUSION_IMAGE:-skabrits/fusion360:4.0.0}
     build:
       context: .
       target: final
@@ -29,6 +29,9 @@ services:
       TITLE: Autodesk Fusion
       FUSION_AUTOSTART: "1"
       FUSION_RENDER_MODE: ${FUSION_RENDER_MODE:-auto}
+      FUSION_WINE_USE_EGL: ${FUSION_WINE_USE_EGL:-auto}
+      FUSION_WINE_D3D_CONFIG: ${FUSION_WINE_D3D_CONFIG:-}
+      FUSION_XFCE_COMPOSITOR: ${FUSION_XFCE_COMPOSITOR:-auto}
       FUSION_PROXY_URL: ${FUSION_PROXY_URL:-}
       FUSION_WINDOW_MANAGED: ${FUSION_WINDOW_MANAGED:-Y}
       FUSION_UNMANAGE_OWNED_WINDOWS: ${FUSION_UNMANAGE_OWNED_WINDOWS:-N}

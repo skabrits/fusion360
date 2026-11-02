@@ -50,7 +50,7 @@ Create `compose.yaml`:
 ```yaml
 services:
   fusion:
-    image: skabrits/fusion360:3.4.1
+    image: skabrits/fusion360:4.0.0
     container_name: fusion360
     platform: linux/amd64
 
@@ -185,7 +185,7 @@ A complete example:
 ```yaml
 services:
   fusion:
-    image: skabrits/fusion360:3.4.1
+    image: skabrits/fusion360:4.0.0
     platform: linux/amd64
 
     environment:
@@ -337,9 +337,14 @@ The image runs an internal local proxy forwarder for Fusion when this option is 
 | `FUSION_PROXY_URL` | empty | Optional HTTP/HTTPS/SOCKS5 proxy |
 | `SLICERS_USE_PROXY` | `0` | Route slicer HTTP traffic through the Fusion proxy |
 | `SLICERS_SOFTWARE_RENDERING` | `0` | Force software rendering for slicers |
-| `DISABLE_DRI3` | unset | Set to `false` to enable GPU-backed Xvfb where supported |
-| `DISABLE_ZINK` | unset | Set to `true` for native NVIDIA OpenGL instead of forced Zink |
-| `WINE_D3D_CONFIG` | unset | Use `renderer=vulkan` with the tested NVIDIA configuration |
+| `FUSION_RENDER_MODE` | `auto` | Probe native NVIDIA, then Mesa Intel/AMD; otherwise CPU. Also `nvidia`, `dri`, `cpu` |
+| `FUSION_WINE_USE_EGL` | `auto` | Wine 11 backend: NVIDIA=GLX (`N`), Mesa/CPU=EGL (`Y`); override `Y` or `N` |
+| `FUSION_WINE_D3D_CONFIG` | empty | Optional Direct3D backend override, e.g. `renderer=vulkan` |
+| `FUSION_XFCE_COMPOSITOR` | `auto` | Restore compositor on NVIDIA upgrades; `on` and `off` explicitly control it |
+| `DISABLE_DRI3` | unset | Upstream defaults to `false` for GPU-backed Xvfb when supported |
+| `DISABLE_ZINK` | unset | NVIDIA overlay sets `true`; Fusion chooses GLX vendor per launch |
+| `DRINODE` / `DRI_NODE` | unset | Selkies render/encode device selection |
+| `DRI_PRIME` | unset | Mesa multi-GPU rendering selection |
 
 The default web port inside the container is:
 

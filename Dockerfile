@@ -131,33 +131,12 @@ RUN set -eux; \
     fi; \
     rm /tmp/wine-ldd.txt /tmp/winex11-ldd.txt
 
-COPY --from=gost /bin/gost /usr/local/bin/gost
-COPY vendor/ /opt/fusion-lab/vendor/
-COPY bin/ /opt/fusion-lab/bin/
-COPY proxy/bin/ /opt/fusion-lab/bin/
-COPY slicers/bin/ /opt/fusion-lab/slicers/
-COPY certs/printer-certs.py /opt/fusion-lab/slicers/printer-certs.py
-COPY web/ /opt/fusion-lab/web/
-COPY root/ /
-COPY proxy/root/ /
-COPY slicers/root/ /
-COPY certs/75-printer-certs /custom-cont-init.d/75-printer-certs
-
-RUN set -eu; \
-    chmod +x /opt/fusion-lab/bin/* /opt/fusion-lab/slicers/slicer-run \
-      /custom-cont-init.d/50-fusion /custom-cont-init.d/60-fusion-proxy \
-      /custom-cont-init.d/70-slicers /custom-cont-init.d/75-printer-certs \
-      /custom-services.d/fusion-proxy; \
-    ln -sf /opt/fusion-lab/bin/fusion-run /usr/local/bin/fusion-run; \
-    ln -sf /opt/fusion-lab/bin/fusion-restart /usr/local/bin/fusion-restart; \
-    ln -sf /opt/fusion-lab/bin/fusion-install /usr/local/bin/fusion-install; \
-    ln -sf /opt/fusion-lab/slicers/slicer-run /usr/local/bin/bambu-studio; \
-    ln -sf /opt/fusion-lab/slicers/slicer-run /usr/local/bin/orca-slicer; \
-    desktop-file-validate /usr/share/applications/autodesk-fusion.desktop; \
-    desktop-file-validate /usr/share/applications/fusion-bambu-studio.desktop; \
-    desktop-file-validate /usr/share/applications/fusion-orca-slicer.desktop; \
-    update-desktop-database /usr/share/applications; \
-    python3 /opt/fusion-lab/bin/install-selkies.py
+# Only installer dependencies belong before the expensive Fusion seed.
+# Changes to desktops, icons, proxy, slicer launchers, or Selkies therefore
+# cannot invalidate Wine compilation or the factory Fusion installation.
+COPY bin/build-seed bin/fusion-install bin/fusion-common bin/fusion-fetch bin/fusion-prefix-check bin/find-fusion-exe /opt/fusion-lab/bin/
+COPY vendor/winetricks vendor/OpenGL.xml /opt/fusion-lab/vendor/
+RUN chmod +x /opt/fusion-lab/bin/* /opt/fusion-lab/vendor/winetricks
 
 # Building Fusion prefix.
 FROM runtime AS installer
@@ -172,24 +151,49 @@ FROM runtime AS final
 ARG FUSION_SEED_REV=1
 COPY --from=installer /opt/fusion-seed/ /opt/fusion-seed/
 
-# Slicers installation.
+# Install slicers before copying UI/runtime files: changing an icon or Fusion
+# launcher does not trigger another AppImage download/extraction.
+COPY slicers/bin/ /opt/fusion-lab/slicers/
+COPY certs/printer-certs.py /opt/fusion-lab/slicers/printer-certs.py
 RUN --mount=type=cache,id=fusion-v3-slicers,target=/var/cache/fusion-slicers,sharing=locked \
     python3 /opt/fusion-lab/slicers/install.py && \
     python3 /opt/fusion-lab/slicers/printer-certs.py --capture
-    
-COPY bin/fusion-graphics /opt/fusion-lab/bin/fusion-graphics
-COPY bin/fusion-run-wrapper /opt/fusion-lab/bin/fusion-run-wrapper
+
+# Runtime-only files must be copied after Wine AND Fusion seed generation.
+COPY --from=gost /bin/gost /usr/local/bin/gost
+COPY vendor/ /opt/fusion-lab/vendor/
+COPY bin/ /opt/fusion-lab/bin/
+COPY proxy/bin/ /opt/fusion-lab/bin/
+COPY web/ /opt/fusion-lab/web/
+COPY root/ /
+COPY proxy/root/ /
+COPY slicers/root/ /
+COPY certs/75-printer-certs /custom-cont-init.d/75-printer-certs
+
 RUN set -eu; \
-    test -f /opt/fusion-lab/bin/fusion-run; \
-    mv /opt/fusion-lab/bin/fusion-run /opt/fusion-lab/bin/fusion-run-base; \
-    chmod 0755 /opt/fusion-lab/bin/fusion-graphics /opt/fusion-lab/bin/fusion-run-wrapper; \
-    cp /opt/fusion-lab/bin/fusion-run-wrapper /opt/fusion-lab/bin/fusion-run; \
-    chmod 0755 /opt/fusion-lab/bin/fusion-run
-ENV FUSION_RENDER_MODE=auto
+    chmod +x /opt/fusion-lab/bin/* /opt/fusion-lab/slicers/slicer-run \
+      /custom-cont-init.d/50-fusion /custom-cont-init.d/60-fusion-proxy \
+      /custom-cont-init.d/70-slicers /custom-cont-init.d/75-printer-certs \
+      /custom-services.d/fusion-proxy; \
+    ln -sf /opt/fusion-lab/bin/fusion-run /usr/local/bin/fusion-run; \
+    ln -sf /opt/fusion-lab/bin/fusion-restart /usr/local/bin/fusion-restart; \
+    ln -sf /opt/fusion-lab/bin/fusion-install /usr/local/bin/fusion-install; \
+    ln -sf /opt/fusion-lab/bin/fusion-gpu-check /usr/local/bin/fusion-gpu-check; \
+    ln -sf /opt/fusion-lab/slicers/slicer-run /usr/local/bin/bambu-studio; \
+    ln -sf /opt/fusion-lab/slicers/slicer-run /usr/local/bin/orca-slicer; \
+    desktop-file-validate /usr/share/applications/autodesk-fusion.desktop; \
+    desktop-file-validate /usr/share/applications/fusion-bambu-studio.desktop; \
+    desktop-file-validate /usr/share/applications/fusion-orca-slicer.desktop; \
+    update-desktop-database /usr/share/applications; \
+    python3 /opt/fusion-lab/bin/install-selkies.py
+
+ENV FUSION_RENDER_MODE=auto \
+    FUSION_WINE_USE_EGL=auto \
+    FUSION_XFCE_COMPOSITOR=auto
 
 LABEL org.opencontainers.image.title="Autodesk Fusion 360 + Selkies" \
-      org.opencontainers.image.version="3.4.1" \
-      org.opencontainers.image.description="Fusion/Wine with managed main window, universal auxiliary-window stacking policy, browser fixes, Selkies, slicers, proxy and printer CA support" \
+      org.opencontainers.image.version="4.0.0" \
+      org.opencontainers.image.description="Fusion/Wine with automatic CPU/Intel/AMD/NVIDIA OpenGL backend and adaptive Wine EGL/GLX selection" \
       org.opencontainers.image.authors="seva.kabrits@gmail.com"
 
 # LinuxServer Webtop supplies /init. /config stays persistent and receives the factory seed on first start.

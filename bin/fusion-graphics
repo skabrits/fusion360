@@ -97,12 +97,13 @@ fusion_graphics_setup() {
             unset MESA_LOADER_DRIVER_OVERRIDE LIBGL_KOPPER_DRI2 __GLX_VENDOR_LIBRARY_NAME
             export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
             # Never carry a GPU-specific WineD3D override from this selector.
+            unset WINE_D3D_CONFIG
             ;;
         nvidia)
             unset MESA_LOADER_DRIVER_OVERRIDE GALLIUM_DRIVER LIBGL_KOPPER_DRI2 LIBGL_ALWAYS_SOFTWARE
             export __GLX_VENDOR_LIBRARY_NAME=nvidia
             # The exact combination verified on NVIDIA GTX 1050 Ti in this image.
-            export WINE_D3D_CONFIG="${WINE_D3D_CONFIG:-renderer=vulkan}"
+            export WINE_D3D_CONFIG="${FUSION_WINE_D3D_CONFIG:-renderer=vulkan}"
             ;;
         dri)
             unset LIBGL_ALWAYS_SOFTWARE __GLX_VENDOR_LIBRARY_NAME
@@ -112,11 +113,16 @@ fusion_graphics_setup() {
                 export MESA_LOADER_DRIVER_OVERRIDE=zink GALLIUM_DRIVER=zink LIBGL_KOPPER_DRI2=1
             fi
             # Do not assume Vulkan WineD3D works on untested Intel/AMD hosts;
-            # they retain the image's normal WineD3D backend by default.
+            # they retain Wine's default unless explicitly overridden.
+            unset WINE_D3D_CONFIG
             ;;
     esac
+    if [[ -n "${FUSION_WINE_D3D_CONFIG:-}" ]]; then
+        export WINE_D3D_CONFIG="$FUSION_WINE_D3D_CONFIG"
+    fi
     export FUSION_RENDER_SELECTED="$choice"
     export FUSION_RENDER_MESA_IMPL="$mesa_impl"
     echo "Fusion graphics: requested=$requested selected=$choice mesa=${mesa_impl:-none} DISPLAY=${DISPLAY:-unset}"
+    echo "Fusion graphics: Wine UseEGL=${FUSION_WINE_USE_EGL:-auto} (native NVIDIA auto=N; Mesa/CPU auto=Y)"
     echo "Fusion graphics: GLX_VENDOR=${__GLX_VENDOR_LIBRARY_NAME:-default} GALLIUM_DRIVER=${GALLIUM_DRIVER:-default} MESA_LOADER_DRIVER_OVERRIDE=${MESA_LOADER_DRIVER_OVERRIDE:-default} WINE_D3D_CONFIG=${WINE_D3D_CONFIG:-default}"
 }

@@ -16,6 +16,8 @@ install -d -o abc -g abc \
   /config/.config/autostart \
   /config/Desktop
 runuser -u abc -- python3 /opt/fusion-lab/bin/fusion-seed.py /config /opt/fusion-seed
+# Restore XFCE compositing (not NVIDIA GLX) before XFCE starts.
+runuser -u abc -- python3 /opt/fusion-lab/bin/fusion-xfce.py
 # Install managed autostart even on an existing desktop profile.
 install -o abc -g abc -m 0644 /etc/xdg/autostart/fusion.desktop /config/.config/autostart/fusion.desktop
 # Always provide a clickable XFCE launcher. The helper extracts Fusion's embedded icon when possible.

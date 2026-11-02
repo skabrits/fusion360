@@ -33,6 +33,18 @@ def set_reg_sz(key, name, value):
     reg('add', key, '/v', name, '/t', 'REG_SZ', '/d', value, '/f')
 
 
+def wine_use_egl(selected, override='auto'):
+    """Wine 11 defaults to EGL. Native NVIDIA GLX in this image needs GLX.
+
+    Mesa Intel/AMD/CPU retain Wine's EGL preference, with a user override
+    for specific cards whose EGL stack is not accelerated or compatible.
+    """
+    override = override.strip().lower()
+    if override not in {'auto', 'y', 'n'}:
+        raise ValueError('FUSION_WINE_USE_EGL must be auto, Y or N')
+    return ('N' if selected == 'nvidia' else 'Y') if override == 'auto' else override.upper()
+
+
 def configure_wine():
     values = {
         'Managed': yn('FUSION_WINDOW_MANAGED', 'Y'),
@@ -51,11 +63,21 @@ def configure_wine():
     for name, value in values.items():
         reg('add', FUSION_X11_KEY, '/v', name, '/t', 'REG_SZ', '/d', value, '/f')
 
+    # EGL is Wine 11's X11 default. On the verified proprietary NVIDIA/Xvfb
+    # route it silently chose llvmpipe even though NVIDIA GLX was available.
+    # UseEGL=N is necessary for Fusion's native NVIDIA OpenGL renderer.
+    # Reset it to Y when switching back to Mesa/CPU so a persisted NVIDIA
+    # setting cannot spoil another host or a changed render mode.
+    selected = os.environ.get('FUSION_RENDER_SELECTED', 'cpu')
+    egl = wine_use_egl(selected, os.environ.get('FUSION_WINE_USE_EGL', 'auto'))
+    set_reg_sz(DEFAULT_X11_KEY, 'UseEGL', egl)
+
     # WebView2 compatibility is independent from X11 stacking. Scope the Windows
     # version override to the helper executable only; Fusion itself stays win10.
     set_reg_sz(WEBVIEW_APP_KEY, 'Version', os.environ.get('FUSION_WEBVIEW2_WINVER', 'win8'))
 
     print('Fusion X11: ' + ', '.join(f'{k}={v}' for k, v in values.items()), flush=True)
+    print('Fusion Wine X11: renderer=' + selected + ' UseEGL=' + egl, flush=True)
     print('WebView2 Version=' + os.environ.get('FUSION_WEBVIEW2_WINVER', 'win8'), flush=True)
 
 
@@ -106,28 +128,7 @@ def wait_for_window_manager(display, timeout=60):
 def ensure_compositor():
     display = Display()
     try:
-        # A reachable X server is not proof that XFCE has finished starting.
-        # The former fallback launched xfwm4 --replace --vblank=off when the
-        # compositor selection was temporarily unowned, racing XFCE startup
-        # and sometimes leaving the desktop without a working window manager.
         wait_for_window_manager(display)
-        if display.owner():
-            return
-        for args in (
-            ['xfconf-query', '-c', 'xfwm4', '-p', '/general/use_compositing', '-s', 'true'],
-            ['xfconf-query', '-c', 'xfwm4', '-p', '/general/use_compositing', '-n', '-t', 'bool', '-s', 'true'],
-        ):
-            if subprocess.run(args, timeout=5, stdout=subprocess.DEVNULL,
-                              stderr=subprocess.DEVNULL).returncode == 0:
-                break
-        for _ in range(30):
-            if display.owner():
-                return
-            time.sleep(0.2)
-        # Do not forcibly replace XFCE's window manager: compositor readiness
-        # is distinct from WM readiness. Fusion can still run without effects.
-        print('Fusion X11: XFCE compositor unavailable; proceeding without '
-              'restarting the window manager.', flush=True)
     finally:
         display.close()
 
